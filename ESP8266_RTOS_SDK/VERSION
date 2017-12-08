@@ -1,0 +1,20 @@
+gwen:
+    crypto:     191728c
+    espnow:     191728c
+    main:       191728c
+    mesh:       191728c
+    minic:      191728c
+    net80211:   191728c
+    pp:         191728c
+    pwm:        191728c
+    smartconfig:191728c
+    wpa:        191728c
+    wps:        191728c
+
+gitlab:
+    espconn:    3a998034
+    freertos:   ac047746
+    lwip:       ac047746
+    driver:     7bee5263
+    mbedtls:    1ac9f1f4
+    ssl:        eefb383a
