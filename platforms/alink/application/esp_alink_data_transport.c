@@ -351,6 +351,11 @@ alink_err_t alink_trans_init(alink_product_t* info)
     
     alink_wait_ap_connected();
     ALINK_LOGD("connected to ap!");
+
+#ifdef JOYLINK_SMNT_ENABLE
+        esp_joylink_start();
+#endif
+
     struct station_config wifi_config;
 
     if (esp_alink_info_load(ALINK_NVS_KEY_WIFI_CONFIG, &wifi_config, sizeof(struct station_config)) <= 0) {
@@ -362,7 +367,7 @@ alink_err_t alink_trans_init(alink_product_t* info)
     if (xSemaphoreTake(s_need_notify_app, 1000 / portTICK_RATE_MS) == pdPASS) {
         aws_notify_app();
     }
-    
+
     return ret;
 }
 

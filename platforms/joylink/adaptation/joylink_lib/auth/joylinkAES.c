@@ -863,7 +863,7 @@ int device_aes_encrypt(const UINT8 * key, int keyLength,
 
 	if (NULL == (TIV = (char*)zalloc(128))){
 		log_error("zalloc err");
-		return;
+		return 0;
 	}
 	
     strncpy(TIV, (char*)iv, strlen((char *)iv));
@@ -904,7 +904,7 @@ int device_aes_decrypt(const UINT8 * key, int keyLength,
 
 	if (NULL == (TIV = (char*)zalloc(128))){
 		log_error("zalloc err");
-		return;
+		return 0;
 	}
 
     strncpy(TIV, (char*)iv, strlen((char*)iv));

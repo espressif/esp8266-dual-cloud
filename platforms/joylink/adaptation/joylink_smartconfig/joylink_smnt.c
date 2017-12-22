@@ -89,7 +89,16 @@ int  joylink_cfg_Result(joylinkResult_t* pRet)
 	return 1;
 }
 
-int joylink_cfg_50msTimer(void)
+int joylink_get_smnt_state(void)
+{
+    if (pSmnt->state == SMART_CH_LOCKED) {
+        return 1;
+    }
+
+    return 0;
+}
+
+int joylink_cfg_50msTimer(uint8 channel)
 {
 	if (pSmnt->directTimerSkip){
 		pSmnt->directTimerSkip--;
@@ -113,12 +122,8 @@ int joylink_cfg_50msTimer(void)
 		pSmnt->chCurrentProbability--;
 		printf_high("------------------->SYNC (CH:%d) %d\n", pSmnt->chCurrentIndex + 1, pSmnt->chCurrentProbability);
 		return 50;
-	}
-    uint8 channel_val = (pSmnt->chCurrentIndex + 1) % 13;
-    
-    if (adp_changeCh(channel_val +1)) {
-        pSmnt->chCurrentIndex = (pSmnt->chCurrentIndex + 1) % 13;//CHANNEL_ALL_NUM;
-    }
+	}    
+    pSmnt->chCurrentIndex = channel;//CHANNEL_ALL_NUM;
 	//pSmnt->chCurrentIndex = (pSmnt->chCurrentIndex + 1) % 13;
 	//adp_changeCh(pSmnt->chCurrentIndex +1);
 	pSmnt->state = SMART_CH_LOCKING;

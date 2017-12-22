@@ -322,6 +322,7 @@ static void joylink_task(void *pvParameters)
      struct station_config wifi_config;
     joylink_event_param_t *param = (joylink_event_param_t *)malloc(sizeof(joylink_event_param_t));
 
+#if 0
      wifi_set_opmode(STATION_MODE);
      int ret = esp_joylink_info_load(JOYLINK_NVS_KEY_WIFI_CONFIG, &wifi_config, sizeof(struct station_config));
      JOYLINK_LOGI("check sta config, ssid: %s  password: %s", wifi_config.ssid, wifi_config.password);
@@ -334,6 +335,8 @@ static void joylink_task(void *pvParameters)
              jd_innet_start();
          } else if (config_mode == CONFIG_MODE_SOFTAP) {  /* start softap innet process */
              joylink_softap_innet();
+         } else {
+            jd_innet_start();
          }
 
          joylink_event_send(JOYLINK_EVENT_WIFI_START_SMARTCONFIG, NULL);
@@ -342,7 +345,9 @@ static void joylink_task(void *pvParameters)
         rsn = JOYLINK_GOT_IP_AUTO_CONN;
 	    wifi_station_connect();
      }
-
+#else
+	rsn = JOYLINK_GOT_IP_AUTO_CONN;
+#endif
 
      joylink_wait_station_got_ip();   /* wait connect to ap, no timeout */
      param->conn.rsn = rsn;
@@ -352,25 +357,31 @@ static void joylink_task(void *pvParameters)
          esp_joylink_info_load(JOYLINK_NVS_KEY_WIFI_CONFIG, &(param->conn.conf), sizeof(struct station_config));
      }
 
-     JOYLINK_LOGI("connected to %s password is %s", param->conn.conf.ssid, param->conn.conf.password);
+    JOYLINK_LOGI("connected to %s password is %s", param->conn.conf.ssid, param->conn.conf.password);
     joylink_event_send(JOYLINK_EVENT_WIFI_GOT_IP, param);
-   	joylink_main_start();  /* joylink SDK loop task */
-
+    // joylink_main_start();  /* joylink SDK loop task */
+    joylink_main_loop();
 	vTaskDelete(NULL);
+}
+
+void esp_joylink_start(void)
+{
+    joylink_start();
+    xTaskCreate(joylink_task, "jl_task", JOYLINK_MAIN_TASK_STACK, NULL, JOYLINK_TASK_PRIOTY, NULL);
 }
 
 joylink_err_t esp_joylink_init(joylink_info_t *joylink_info)
 {
     JOYLINK_PARAM_CHECK(!joylink_info);
-
+    
 	/* init joylink config of product */
 	memcpy(&(_g_pdev->jlp), &(joylink_info->jlp), sizeof(JLPInfo_t));
+
+    joylink_main_start();
 	/* init wifi config */
 	jd_innet_set_aes_key((const char*)(joylink_info->innet_aes_key));
 	/* init Queue and Semaphore */
 	joylink_trans_init();
-	/* init event task */
-	xTaskCreate(joylink_task, "jl_task", JOYLINK_MAIN_TASK_STACK, NULL, JOYLINK_TASK_PRIOTY, NULL);
 
 	return JOYLINK_OK;
 }
@@ -387,7 +398,7 @@ joylink_err_t joylink_get_jlp_info(joylink_info_t *joylink_info)
 
 void esp_joylink_set_version(uint8_t version)
 {
-    joylink_dev_get_jlp_info(&_g_pdev->jlp);
+    // joylink_dev_get_jlp_info(&_g_pdev->jlp);
 
     if (_g_pdev->jlp.version != version) {
         _g_pdev->jlp.version = version;

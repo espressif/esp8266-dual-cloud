@@ -54,7 +54,7 @@ struct sniffer_buf {
 
 struct sniffer_buf2{
     struct RxControl rx_ctrl;
-    uint8 buf[112];
+    uint8 buf[496];
     uint16 cnt;
     uint16 len; //length of packet
 };
@@ -72,16 +72,18 @@ typedef struct jd_sniffer{
 static const char *AES_KEY = NULL;
 JD_SNIFFER   JDSnifGlob = {0};
 static os_timer_t channel_timer;
-static os_timer_t loop_timer;
 static unsigned char* s_pBuffer = NULL;
-static xSemaphoreHandle s_sem_check_result = NULL;
-
+// static xSemaphoreHandle s_sem_check_result = NULL;
+bool aws_get_wifi = false;
 /* set channel */
 uint8_t adp_changeCh(int i)
 {
     wifi_set_channel(i);
     return 1; //must to change channel
 }
+
+void jd_innet_check_result(void);
+
 
 void ICACHE_FLASH_ATTR
 joylink_config_rx_callback(uint8_t *buf, uint16_t buf_le)
@@ -94,6 +96,11 @@ joylink_config_rx_callback(uint8_t *buf, uint16_t buf_le)
 	if(1 == JDSnifGlob.stop_flag){
         return;
     }
+
+    if (buf_le == sizeof(struct sniffer_buf2)) { /* managment frame */
+        return;
+    }
+    
     if (buf_le == 12 || buf_le == 128) {
         return;
     } else {
@@ -106,9 +113,9 @@ joylink_config_rx_callback(uint8_t *buf, uint16_t buf_le)
             if (joylink_cfg_Result(&Ret) == 0) {
                 if (Ret.type != 0) {
                     JDSnifGlob.stop_flag = 1;
-                	wifi_promiscuous_enable(0);
-                	os_timer_disarm(&loop_timer); //close timer
-                    xSemaphoreGive(s_sem_check_result);
+                    wifi_promiscuous_enable(0);
+                    // xSemaphoreGive(s_sem_check_result);
+                    jd_innet_check_result();
                     return;
                 }
             }
@@ -127,9 +134,16 @@ joylink_config_loop_do(void *arg)
         return;
     }
     //joylink_innet_timingcall();
-	uint8_t ret = joylink_cfg_50msTimer();
-    os_timer_disarm(&loop_timer);
-	os_timer_arm(&loop_timer, ret, 0); //loop to do task
+	//uint8_t ret = joylink_cfg_50msTimer();
+}
+static char joylink_ssid[32];
+static char joylink_password[64];
+
+int joylink_get_ssid_passwd(char ssid[32 + 1], char passwd[64 + 1])
+{
+    log_info("joylink_get_ssid_passwd:%s, %s", joylink_ssid,joylink_password);
+    memcpy(ssid,joylink_ssid,sizeof(joylink_ssid));
+    memcpy(passwd,joylink_password,sizeof(joylink_password));
 }
 
 bool jd_innet_get_result()
@@ -148,33 +162,36 @@ bool jd_innet_get_result()
             len = device_aes_decrypt((const uint8 *)AES_KEY, strlen(AES_KEY),AES_IV,
                 Ret.encData + 1,Ret.encData[0], jd_aes_out_buffer,sizeof(jd_aes_out_buffer));
             if (len > 0) {
-                struct station_config config;
-                memset(&config,0x0,sizeof(config));
                 if (jd_aes_out_buffer[0] > 32) {
                     log_error("sta password len error");
                     return rsp;
                 }
                 pass_len = jd_aes_out_buffer[0];
-                memcpy(config.password,jd_aes_out_buffer + 1, pass_len);
+                if (pass_len > sizeof(joylink_password)) {
+                    log_error("sta password len error");
+                    return rsp;
+                }
+                
+                memcpy(joylink_password,jd_aes_out_buffer + 1, pass_len);
                 ssid_len = len - 1 - pass_len - 4 - 2;
-                if (ssid_len > sizeof(config.ssid)) {
+                if (ssid_len > sizeof(joylink_ssid)) {
                     log_error("sta ssid len error");
                     return rsp;
                 }
-                strncpy((char*)config.ssid,(const char*)(jd_aes_out_buffer + 1 + pass_len + 4 + 2), ssid_len);
-                if (0 == config.ssid[0]) {
+                strncpy(joylink_ssid,(const char*)(jd_aes_out_buffer + 1 + pass_len + 4 + 2), ssid_len);
+                if (0 == joylink_ssid[0]) {
                     log_error("sta ssid error");
                     return rsp;
                 }
-                log_info("ssid len:%d, ssid:%s", ssid_len, config.ssid);
-                log_info("pass len:%d, password:%s", pass_len, config.password);
-                if (true != wifi_station_set_config(&config)) {
-                    log_error("set sta fail\r\n");
-                    return rsp;
-                } else {
+                log_info("ssid len:%d, ssid:%s", ssid_len,joylink_ssid);
+                // log_info("pass len:%d, password:%s", pass_len, config.password);
+               {
+                    log_info("set sta ok\r\n");
                     jd_innet_stop();
-                    wifi_station_connect();
+                    aws_get_wifi = true;
+                    // wifi_station_connect();
                     rsp = TRUE;
+                    log_info("aws_get_wifi:%d",aws_get_wifi);
                 }
             } else {
                 log_error("aes fail\r\n");
@@ -185,40 +202,29 @@ bool jd_innet_get_result()
         log_error("result fail\r\n");
         return rsp;
     }
+
+    
     return rsp;
 }
 
+void jd_innet_check_result(void)
+{
+    if (TRUE == jd_innet_get_result()){
+        log_info("innet retry");
+        jd_innet_stop();
+    }
+
+}
+#if 0
 void jd_innet_start_task(void *para)
 {
 INNET_RETRY:
     JDSnifGlob.stop_flag = 0;
-	wifi_station_disconnect();
-	wifi_set_opmode(STATION_MODE);
-    if(NULL == s_pBuffer) {
-        s_pBuffer = (unsigned char*)malloc(1024);
-    }
-    if (s_pBuffer == NULL) {
-        log_error("malloc err");
-        vTaskDelete(NULL);
-        return;
-    }
-    s_sem_check_result = (xSemaphoreHandle)xSemaphoreCreateBinary();
-    if (s_sem_check_result == NULL) {
-        log_error("");
-        vTaskDelete(NULL);
-        return;
-    }
-    log_info("innet start");
-    joylink_cfg_init(s_pBuffer);
-    os_timer_disarm(&loop_timer);
-	os_timer_setfn(&loop_timer, joylink_config_loop_do, NULL); 
-	os_timer_arm(&loop_timer, 50, 0); //loop to do task
-    wifi_set_channel(1);
-    wifi_promiscuous_enable(0);
-    wifi_set_promiscuous_rx_cb(joylink_config_rx_callback);
-    wifi_promiscuous_enable(1);
+	// wifi_station_disconnect();
+	// wifi_set_opmode(STATION_MODE);
+    
     while (1){
-        if(pdTRUE == xSemaphoreTake(s_sem_check_result, 2000/portTICK_RATE_MS)) {//
+        if(pdTRUE == xSemaphoreTake(s_sem_check_result, portMAX_DELAY)) {//
             if (FALSE == jd_innet_get_result()){
                 log_info("innet retry");
                 jd_innet_stop();
@@ -228,18 +234,37 @@ INNET_RETRY:
             break;
         }
     }
+    vSemaphoreDelete(s_sem_check_result);
+    s_sem_check_result = NULL;
     vTaskDelete(NULL);
 }
-
+#endif 
 bool jd_innet_start()
 {  
     if (NULL == AES_KEY) {
        return FALSE;
     }
+    if(NULL == s_pBuffer) {
+        s_pBuffer = (unsigned char*)malloc(1024 - 512);
+    }
+    if (s_pBuffer == NULL) {
+        log_error("malloc err");
+        return false;
+    }
+    #if 0
+    s_sem_check_result = (xSemaphoreHandle)xSemaphoreCreateBinary();
+    if (s_sem_check_result == NULL) {
+        log_error("");
+        return false;
+    }
+    #endif
+    log_info("innet start");
+    joylink_cfg_init(s_pBuffer);
     log_info("*********************************");
     log_info("*     ENTER SMARTCONFIG MODE    *");
     log_info("*********************************");
-    xTaskCreate(jd_innet_start_task, "innet st", 1024-128, NULL, tskIDLE_PRIORITY + 2, NULL);
+    JDSnifGlob.stop_flag = 0;
+    // xTaskCreate(jd_innet_start_task, "innet st", 1024-128, NULL, tskIDLE_PRIORITY + 2, NULL);
     return TRUE;
 }
 
@@ -247,8 +272,7 @@ void ICACHE_FLASH_ATTR
 jd_innet_stop(void)
 {
 	JDSnifGlob.stop_flag = 1;
-	wifi_promiscuous_enable(0);
-	os_timer_disarm(&loop_timer); //close timer
+	// wifi_promiscuous_enable(0);
 	if (s_pBuffer) {
         free(s_pBuffer);
         s_pBuffer = NULL;

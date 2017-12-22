@@ -42,7 +42,9 @@
 
 static const char *TAG = "sample_json";
 extern led_handle_t led_0;
+#ifdef JOYLINK_SMNT_ENABLE
 extern virtual_device_t joylink_virtual_device;
+#endif
 extern xSemaphoreHandle xSemReadInfo;
 
 
@@ -149,6 +151,7 @@ void read_task_test(void *pvParameters)
     }
 }
 
+#ifdef JOYLINK_SMNT_ENABLE
 void joylink_read_task_test(void *pvParameters)
 {
     int cnt = 0;
@@ -165,7 +168,7 @@ void joylink_read_task_test(void *pvParameters)
         JOYLINK_LOGD("highwater %d", uxTaskGetStackHighWaterMark(NULL));
     }
 }
-
+#endif
 
 static int count = 0; /*!< Count the number of packets received */
 static alink_err_t alink_event_handler(alink_event_t event)
@@ -217,7 +220,9 @@ static alink_err_t alink_event_handler(alink_event_t event)
 
     return ALINK_OK;
 }
+#ifdef JOYLINK_SMNT_ENABLE
 extern void start_joylink_demo(void);
+#endif
 static xTaskHandle read_handle = NULL;
 void start_alink_task(void *pvParameters)
 {
@@ -244,8 +249,6 @@ void start_alink_task(void *pvParameters)
     esp_alink_init(&product_info, alink_event_handler);
 
     xTaskCreate(read_task_test, "read_task_test", (1024 + 512) / 4, NULL, tskIDLE_PRIORITY + 5, &read_handle);
-    xTaskCreate(joylink_read_task_test, "joylink_read_task_test", (1024 + 512) / 4, NULL, tskIDLE_PRIORITY + 5, &read_handle);
-
     vTaskDelete(NULL);
 }
 
@@ -282,7 +285,8 @@ void user_demo(void)
     user_show_rst_info();    /* print reset reason and information */
     xTaskCreate(alink_debug_task, "debug_task", 512 / 4 , NULL, tskIDLE_PRIORITY + 3, NULL);
 #endif
-
+    uart_div_modify(0, UART_CLK_FREQ / 921600);
+    
     ALINK_LOGI("****************************");
     ALINK_LOGI("SDK version:%s", system_get_sdk_version());
     ALINK_LOGI("Alink version:%s", USER_ALINK_GLOBAL_VER);
@@ -290,9 +294,10 @@ void user_demo(void)
     ALINK_LOGI("Current userbin start address: %x", system_get_userbin_addr());
     ALINK_LOGI("Esp debug heap size %d", system_get_free_heap_size());
     ALINK_LOGI("****************************");
-
+#ifdef JOYLINK_SMNT_ENABLE
+    start_joylink_demo();
+#endif
     xTaskCreate(start_alink_task, "start_alink_task", 1024, NULL, tskIDLE_PRIORITY + 5, NULL);
-
 }
 
 #endif

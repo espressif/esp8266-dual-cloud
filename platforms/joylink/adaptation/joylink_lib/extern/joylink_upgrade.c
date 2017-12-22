@@ -84,10 +84,10 @@ LOCAL void upgrade_recycle( xTimerHandle xTimer )
     sumlength = 0;
     flash_erased = false;
     system_upgrade_recycle();
-	printf("upgrade_flag_check:%d\r\n",system_upgrade_flag_check());
+	os_printf("upgrade_flag_check:%d\r\n",system_upgrade_flag_check());
     if (system_upgrade_flag_check() == UPGRADE_FLAG_FINISH) {
         joylink_dev_ota_status_upload(2, 100, "ota ok", 1);
-        printf("[ota] HighWater %d\n", uxTaskGetStackHighWaterMark(NULL));
+        os_printf("[ota] HighWater %d\n", uxTaskGetStackHighWaterMark(NULL));
         //save version to flash
 		vTaskDelay(100 / portTICK_RATE_MS);
 //		uart_swap_switch_off(); 
@@ -118,7 +118,7 @@ void upgrade_download(int sta_socket,char *pusrdata, unsigned short length)
     static int s_up_cnt = 0;
     if (totallength == 0 && (ptr = (char *)strstr(pusrdata, "\r\n\r\n")) != NULL &&
             (ptr = (char *)strstr(pusrdata, "Content-Length")) != NULL) {
-        printf("recv header: %s\r\n",pusrdata);
+        os_printf("recv header: %s\r\n",pusrdata);
         ptr = (char *)strstr(pusrdata, "\r\n\r\n");
         length -= ptr - pusrdata;
         length -= 4;
@@ -142,32 +142,32 @@ void upgrade_download(int sta_socket,char *pusrdata, unsigned short length)
                         goto ota_recycle;
                 	}
                 	totallength += length;
-                	printf("sumlength = %d\n",sumlength);
+                	os_printf("sumlength = %d\n",sumlength);
                     s_up_cnt = 0;
                 	return;
                 }
             } else {
-                printf("sumlength failed\n");
+                os_printf("sumlength failed\n");
                 system_upgrade_flag_set(UPGRADE_FLAG_IDLE);	
                 goto ota_recycle;
             }
         } else {
-            printf("Content-Length: failed\n");
+            os_printf("Content-Length: failed\n");
             system_upgrade_flag_set(UPGRADE_FLAG_IDLE);	
             goto ota_recycle;
         } 
     } else {
         totallength += length;
-        printf("totallen = %d\n",totallength);
+        os_printf("totallen = %d\n",totallength);
         if (false == system_upgrade(pusrdata, length)){
         	system_upgrade_flag_set(UPGRADE_FLAG_IDLE);
             goto ota_recycle;
         }
         if (totallength >= sumlength) {
-	        printf("upgrade file download finished.\n");
+	        os_printf("upgrade file download finished.\n");
 //            joylink_dev_ota_status_upload(1, 100, "fw installing", 0);
 	        if(upgrade_crc_check(system_get_fw_start_sec(),sumlength) != true) {
-				printf("upgrade crc check failed !\n");
+				os_printf("upgrade crc check failed !\n");
 		        system_upgrade_flag_set(UPGRADE_FLAG_IDLE);	
 		        goto ota_recycle;
 		    }
@@ -178,14 +178,14 @@ void upgrade_download(int sta_socket,char *pusrdata, unsigned short length)
 //            s_up_cnt++;
 //            if (0 == s_up_cnt%80) {
 //                joylink_dev_ota_status_upload(0, totallength*100/sumlength, "downloading", 0);
-//                printf("[ota] HighWater %d\n", uxTaskGetStackHighWaterMark(NULL));
+//                os_printf("[ota] HighWater %d\n", uxTaskGetStackHighWaterMark(NULL));
 //            }
             return;
         }        
     }
 
 ota_recycle :
-	printf("go to ota recycle");
+	os_printf("go to ota recycle");
     close(sta_socket);
     upgrade_recycle(NULL);
 }
@@ -280,7 +280,7 @@ void fota_begin(void *pvParameters)
 	    if (-1 == sta_socket)
 	    {
 	        close(sta_socket);
-	        printf("socket fail !\r\n");
+	        os_printf("socket fail !\r\n");
 	        continue;
 	    }
         g_joylink_upgrade->sockaddrin.sin_family = AF_INET;
@@ -289,7 +289,7 @@ void fota_begin(void *pvParameters)
 	    if(0 != connect(sta_socket,(struct sockaddr *)(remote_ip),sizeof(struct sockaddr)))
 	    {
 	        close(sta_socket);
-	        printf("connect fail!\r\n");
+	        os_printf("connect fail!\r\n");
 	        system_upgrade_flag_set(UPGRADE_FLAG_IDLE);	
 	        upgrade_recycle(NULL);
 	    }//inet_ntoa(g_joylink_upgrade->sockaddrin.sin_addr)

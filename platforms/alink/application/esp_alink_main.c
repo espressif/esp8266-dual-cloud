@@ -144,9 +144,7 @@ alink_err_t esp_alink_init(alink_product_t* info, alink_event_cb_t event_handler
     ret = alink_trans_init(info);
     ALINK_ERROR_CHECK(ret != ALINK_OK, ALINK_ERR, "alink trans init fail");
 
-    xTaskCreate(alink_post_data_task, "alink_post_data_task", 512+32, NULL,
-        tskIDLE_PRIORITY + 5, &post_handle);
-
+    xTaskCreate(alink_post_data_task, "alink_post_data_task", 512+32, NULL,tskIDLE_PRIORITY + 5, &post_handle);
     return ret;
 }
 
