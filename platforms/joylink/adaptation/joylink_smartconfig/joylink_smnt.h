@@ -38,7 +38,7 @@ typedef struct _joylinkResult
 
 extern unsigned char adp_changeCh(int i);
 void joylink_cfg_init(unsigned char* pBuffer);                                  // 传入一个1024字节的存储空间
-int  joylink_cfg_50msTimer(void);                                               // 50ms定时器回调,如果返回非零,那么这个值作为下一次调用的时间间隔,可能的取值为(50,100,5000,10000)
+int  joylink_cfg_50msTimer(uint8 channel);                                               // 50ms定时器回调,如果返回非零,那么这个值作为下一次调用的时间间隔,可能的取值为(50,100,5000,10000)
 void joylink_cfg_DataAction(PHEADER_802_11 pHeader, int length);                // 局域网收到数据包
 int  joylink_cfg_Result(joylinkResult_t* pRet);					// Get Result
 

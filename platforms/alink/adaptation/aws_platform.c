@@ -44,6 +44,9 @@
 
 static const char *TAG = "aws_platform";
 
+extern bool aws_get_wifi;
+
+
 #ifndef ETH_ALEN
 #define ETH_ALEN    (6)
 #endif
@@ -100,7 +103,7 @@ struct alink_sniffer_buf {
 
 struct alink_sniffer_buf2 {
     struct alink_RxControl rx_ctrl;
-    uint8_t  buf[112];
+    uint8_t  buf[496];
     uint16_t cnt;
     uint16_t len;  //length of packet
 };
@@ -121,8 +124,19 @@ int aws_timeout_period_ms = 60 * 1000;
 /* scanning time for every channel, suggested value is 200~400ms, here is 200 ms */
 int aws_chn_scanning_period_ms = 200;
 
+#ifdef MEMLEAK_DEBUG
+static const char mem_debug_file[] ICACHE_RODATA_ATTR STORE_ATTR = __FILE__;
+#endif
+#ifdef JOYLINK_SMNT_ENABLE
+int joylink_get_smnt_state(void);
+#endif
 unsigned int vendor_get_time_ms(void)
 {
+    
+    if (aws_get_wifi) {
+        os_printf("vendor_get_time_ms:%d\r\n",(unsigned int)system_get_time() / 1000 + aws_timeout_period_ms);
+        return ((unsigned int)system_get_time() / 1000 + aws_timeout_period_ms);
+    }
     return (unsigned int)system_get_time() / 1000;
 }
 
@@ -146,69 +160,98 @@ void vendor_msleep(int ms)
 
 void vendor_data_callback(unsigned char *buf, int length)
 {
+    if (length < 0){
+        return;
+    }
+
     ALINK_PARAM_CHECK(!buf);
     ALINK_PARAM_CHECK(length < 0);
     
     aws_80211_frame_handler(buf, length, AWS_LINK_TYPE_NONE, 0);
 }
-
+#ifdef JOYLINK_SMNT_ENABLE
+extern void joylink_config_rx_callback(uint8_t *buf, uint16_t buf_le);
+#endif
 static void vendor_sniffer_wifi_promiscuous_rx(uint8 *buf, uint16 buf_len)
 {
+    
     ALINK_PARAM_CHECK(!buf);
     ALINK_PARAM_CHECK(buf_len < 0);
     
     uint8_t *data;
     uint32_t data_len;
+    if (system_get_free_heap_size() < 1024 * 5) {
+        return;
+    }
+
 
     if (buf_len == sizeof(struct alink_sniffer_buf2)) { /* managment frame */
-        struct alink_sniffer_buf2 *sniffer = (struct alink_sniffer_buf2 *)buf;
-        data_len = sniffer->len;
+#ifdef JOYLINK_SMNT_ENABLE
+        if (joylink_get_smnt_state() == 0) 
+#endif
+        {
+            struct alink_sniffer_buf2 *sniffer = (struct alink_sniffer_buf2 *)buf;
+            data_len = sniffer->len;
 
-        if (data_len > sizeof(sniffer->buf)) {
-            data_len = sizeof(sniffer->buf);
-        }
-        
-        data = sniffer->buf;
-        vendor_data_callback(data, data_len);
-    }  else if (buf_len == sizeof(struct alink_RxControl)) { /* mimo, HT40, LDPC */
-        struct alink_RxControl *rx_ctrl= (struct alink_RxControl *)buf;
-        struct ht40_ctrl ht40;
-        ht40.rssi = rx_ctrl->rssi;
-
-        if (rx_ctrl->Aggregation) {
-            ht40.length = rx_ctrl->HT_length - 4;
-        } else {
-            ht40.length = rx_ctrl->HT_length;
-        }
-
-        ht40.filter = rx_ctrl->Smoothing << 5
-                        | rx_ctrl->Not_Sounding << 4
-                        | rx_ctrl->Aggregation << 3
-                        | rx_ctrl->STBC << 1
-                        | rx_ctrl->FEC_CODING;
-
-        aws_80211_frame_handler((char *)&ht40, ht40.length, AWS_LINK_TYPE_HT40_CTRL, 1);
-    } else {
-        struct alink_sniffer_buf *sniffer = (struct alink_sniffer_buf *)buf;
-        data = buf + sizeof(struct alink_RxControl);
-
-        struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)data;
-
-        if (sniffer->cnt == 1) {
-            data_len = sniffer->ampdu_info[0].length - 4;
-            vendor_data_callback(data, data_len);
+            if (data_len > sizeof(sniffer->buf)) {
+                data_len = sizeof(sniffer->buf);
+            }
             
-        } 
-        else {
-            int i;
-            for (i = 1; i < sniffer->cnt; i++) {
-                hdr->seq_ctrl = sniffer->ampdu_info[i].seq;
-                memcpy(&hdr->addr3, sniffer->ampdu_info[i].address3, 6);
+            data = sniffer->buf;
+            vendor_data_callback(data, data_len);
+        }
+    }  else if (buf_len == sizeof(struct alink_RxControl)) { /* mimo, HT40, LDPC */
+#ifdef JOYLINK_SMNT_ENABLE
+        if (joylink_get_smnt_state() == 0) 
+ #endif
+       {
+            struct alink_RxControl *rx_ctrl= (struct alink_RxControl *)buf;
+            struct ht40_ctrl ht40;
+            ht40.rssi = rx_ctrl->rssi;
 
-                data_len = sniffer->ampdu_info[i].length - 4;
+            if (rx_ctrl->Aggregation) {
+                ht40.length = rx_ctrl->HT_length - 4;
+            } else {
+                ht40.length = rx_ctrl->HT_length;
+            }
+
+            ht40.filter = rx_ctrl->Smoothing << 5
+                            | rx_ctrl->Not_Sounding << 4
+                            | rx_ctrl->Aggregation << 3
+                            | rx_ctrl->STBC << 1
+                            | rx_ctrl->FEC_CODING;
+
+            aws_80211_frame_handler((char *)&ht40, ht40.length, AWS_LINK_TYPE_HT40_CTRL, 1);
+        }
+    } else {
+#ifdef JOYLINK_SMNT_ENABLE
+        if (joylink_get_smnt_state() == 0) 
+#endif
+        {
+            struct alink_sniffer_buf *sniffer = (struct alink_sniffer_buf *)buf;
+            data = buf + sizeof(struct alink_RxControl);
+
+            struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)data;
+
+            if (sniffer->cnt == 1) {
+                data_len = sniffer->ampdu_info[0].length - 4;
                 vendor_data_callback(data, data_len);
+                
+            } 
+            else {
+                int i;
+                for (i = 1; i < sniffer->cnt; i++) {
+                    hdr->seq_ctrl = sniffer->ampdu_info[i].seq;
+                    memcpy(&hdr->addr3, sniffer->ampdu_info[i].address3, 6);
+
+                    data_len = sniffer->ampdu_info[i].length - 4;
+                    vendor_data_callback(data, data_len);
+                }
             }
         }
+#ifdef JOYLINK_SMNT_ENABLE
+        joylink_config_rx_callback(buf, buf_len);
+#endif
     }
 }
 
@@ -222,6 +265,9 @@ void vendor_monitor_open(void)
 {
     wifi_set_channel(6);
     wifi_promiscuous_enable(0);
+#ifdef JOYLINK_SMNT_ENABLE
+    jd_innet_start();
+#endif
     wifi_set_promiscuous_rx_cb(vendor_sniffer_wifi_promiscuous_rx);
     wifi_promiscuous_enable(1);
 }
@@ -234,7 +280,18 @@ void vendor_monitor_close(void)
 
 void vendor_channel_switch(char primary_channel, char secondary_channel, char bssid[6])
 {
-    wifi_set_channel(primary_channel);
+#ifdef JOYLINK_SMNT_ENABLE
+    if (aws_get_wifi) { // joylink is ok
+        return;
+    }
+    
+    joylink_cfg_50msTimer(primary_channel);
+
+    if (joylink_get_smnt_state() == 0) 
+#endif
+    {
+        wifi_set_channel(primary_channel);
+    }
 }
 
 int vendor_broadcast_notification(char *msg, int msg_num)
@@ -314,6 +371,7 @@ int vendor_connect_ap(char *ssid, char *passwd)
     ALINK_PARAM_CHECK(passwd == NULL);
 
     struct station_config *config = alink_malloc(sizeof(struct station_config));
+    memset(config,0x0,sizeof(struct station_config));
     strncpy(config->ssid, ssid, SSID_LEN);
     strncpy(config->password, passwd, PASSWD_LEN);
     wifi_station_set_config(config);
@@ -326,7 +384,9 @@ int vendor_connect_ap(char *ssid, char *passwd)
 
     return ALINK_OK;
 }
-
+#ifdef JOYLINK_SMNT_ENABLE
+int joylink_get_ssid_passwd(char ssid[32 + 1], char passwd[64 + 1]);
+#endif
 int aws_smart_config(void)
 {
     int ret;
@@ -346,8 +406,15 @@ int aws_smart_config(void)
     snprintf(dev_mac, sizeof(dev_mac), MACSTR, MAC2STR(macaddr));
     aws_start(DEV_MODEL, ALINK_SECRET, dev_mac, NULL);
     ALINK_LOGD("dev mac:%s",dev_mac);
-    ret = aws_get_ssid_passwd(ssid, passwd, bssid, &auth, &encry, &channel);
-
+#ifdef JOYLINK_SMNT_ENABLE
+    if (aws_get_wifi) {
+         ret = joylink_get_ssid_passwd(ssid, passwd);
+    } 
+    else
+#endif
+    {
+        ret = aws_get_ssid_passwd(ssid, passwd, bssid, &auth, &encry, &channel);
+    }
     if (!ret) {
         ALINK_LOGW("alink wireless setup timeout!");
         aws_destroy();

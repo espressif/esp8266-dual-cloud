@@ -47,6 +47,11 @@ CCFLAGS += -D CONFIG_LOG_JOYLINK_LEVEL=5
 CCFLAGS += -D CONFIG_LOG_ALINK_LEVEL=5
 CCFLAGS += -D CONFIG_ALINK_SDK_LOG_LEVEL=5
 
+CCFLAGS += -DJOYLINK_SMNT_ENABLE
+
+CCFLAGS += -ffunction-sections \
+	-fdata-sections	
+	
 TARGET_LDFLAGS =		\
 	-nostdlib		\
 	-Wl,-EL \
@@ -94,7 +99,6 @@ LINKFLAGS_eagle.app.v6 = \
 	-lfreertos	\
 	-llwip \
 	-lssl \
-	-ljson  \
 	-lsmartconfig \
 	-lspiffs	\
 	$(DEP_LIBS_eagle.app.v6)					\

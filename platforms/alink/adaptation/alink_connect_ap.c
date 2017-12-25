@@ -85,7 +85,9 @@ void alink_wait_ap_connected(void)
 {
     while (1) {
         if (wifi_station_get_connect_status() == STATION_GOT_IP) {
-            start_joylink_demo();
+#ifdef JOYLINK_SMNT_ENABLE
+            // esp_joylink_start();
+#endif
             break;
         }
 

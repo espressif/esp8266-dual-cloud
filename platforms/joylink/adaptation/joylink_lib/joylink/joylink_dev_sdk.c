@@ -163,9 +163,9 @@ joylink_main_start(void)
 {
     //extern void joylink_init_aes_table(void);
     //joylink_init_aes_table();
-    joylink_ecc_contex_init();
     joylink_dev_init();
-    joylink_main_loop();
+    joylink_ecc_contex_init();
+    // joylink_main_loop();
 }
 
 #ifdef _TEST_

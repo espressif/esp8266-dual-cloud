@@ -248,8 +248,32 @@ static void initialise_led(void)
     led_0 = led_create(LED_IO_NUM, LED_DARK_LOW);
     led_state_write(led_0, LED_NORMAL_OFF);
 }
+void joylink_read_task_test(void *pvParameters);
 
 int joylink_start(void)
+{
+
+    if (xSemWriteInfo == NULL) {
+        xSemWriteInfo = (xSemaphoreHandle)xSemaphoreCreateBinary();
+    }
+
+    if (xSemReadInfo == NULL) {
+        xSemReadInfo = (xSemaphoreHandle)xSemaphoreCreateBinary();
+    }
+    esp_joylink_event_init(joylink_event_handler);
+
+    // xTaskCreate(get_free_heap_task, "get_free_heap_task", 128, NULL, 5, NULL);
+    xTaskCreate(read_task_test, "read_task_test", 256, NULL, 5, NULL);
+    xTaskCreate(write_task_test, "write_task_test", 256, NULL, 4, NULL);
+    
+    xTaskCreate(joylink_read_task_test, "joylink_read_task_test", (1024 + 512) / 4, NULL, tskIDLE_PRIORITY + 5, NULL);
+
+    return E_RET_OK;
+}
+
+extern void joylink_init_aes_table(void);
+
+void joylink_dev_information_init()
 {
     joylink_info_t product_info = {
         .innet_aes_key       = JOYLINK_AES_KEY,
@@ -286,29 +310,12 @@ int joylink_start(void)
     JOYLINK_LOGI("sys run  : %s", system_upgrade_userbin_check() ? "user2" : "user1");
     JOYLINK_LOGI("*********************************");
 
-    esp_joylink_event_init(joylink_event_handler);
     //initialise_key();
     initialise_led();
     esp_joylink_info_init();
     esp_joylink_init(&product_info);
     esp_joylink_set_version(JOYLINK_VERSION);
-
-    if (xSemWriteInfo == NULL) {
-        xSemWriteInfo = (xSemaphoreHandle)xSemaphoreCreateBinary();
-    }
-
-    if (xSemReadInfo == NULL) {
-        xSemReadInfo = (xSemaphoreHandle)xSemaphoreCreateBinary();
-    }
-
-    xTaskCreate(get_free_heap_task, "get_free_heap_task", 128, NULL, 5, NULL);
-    xTaskCreate(read_task_test, "read_task_test", 256, NULL, 5, NULL);
-    xTaskCreate(write_task_test, "write_task_test", 256, NULL, 4, NULL);
-
-    return E_RET_OK;
 }
-
-extern void joylink_init_aes_table(void);
 
 void start_joylink_demo(void)
 {
@@ -319,5 +326,5 @@ void start_joylink_demo(void)
     JOYLINK_LOGI("*********************************************");
 
     joylink_init_aes_table();
-    joylink_start();  /* start joylink */
+    joylink_dev_information_init();
 }
